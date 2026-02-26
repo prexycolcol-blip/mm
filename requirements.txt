@@ -1,0 +1,6 @@
+streamlit
+pandas
+numpy
+firebase-admin
+matplotlib
+streamlit-calendar
