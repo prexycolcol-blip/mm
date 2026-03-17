@@ -1,194 +1,154 @@
-
-# ==============================
-# IMPORT LIBRARIES
-# ==============================
 import streamlit as st
-import firebase_admin
-from firebase_admin import credentials, firestore, initialize_app
-from datetime import date
+from datetime import datetime
+import time
 
-# ==============================
-# INITIALIZE FIREBASE
-# ==============================
-if not firebase_admin._apps:
-    cred = credentials.Certificate(dict(st.secrets["firebase"]))
-    firebase_admin.initialize_app(cred)
+st.set_page_config(page_title="Study Tracker", layout="wide")
 
-db = firestore.client()
+# Initialize session state
+if "sessions" not in st.session_state:
+    st.session_state.sessions = []
 
-# ==============================
-# SIDEBAR NAVIGATION
-# ==============================
-st.sidebar.title("📋 Dashboard")
-menu = st.sidebar.radio("Go to", ["Notes", "To-Dos", "Calendar"])
+if "tasks" not in st.session_state:
+    st.session_state.tasks = {}
 
-# ==============================
-# NOTES PAGE
-# ==============================
-if menu == "Notes":
-    st.title("📝 NOTES NI ADING")
+if "subjects" not in st.session_state:
+    st.session_state.subjects = ["Math", "Science"]
 
-    title = st.text_input("Title")
-    notes = st.text_area("Notes", height=150)
-    note_date = st.date_input("Date", value=date.today())
+# Stopwatch state
+if "running" not in st.session_state:
+    st.session_state.running = False
 
-    def save_note(title, notes, note_date):
-        db.collection("notes").add({
-            "title": title,
-            "notes": notes,
-            "date": str(note_date)
-        })
+if "start_time" not in st.session_state:
+    st.session_state.start_time = None
 
-    if st.button("💾 Save Note"):
-        if title.strip() and notes.strip():
-            save_note(title, notes, note_date)
-            st.success("Note saved successfully!")
-            st.rerun()
-        else:
-            st.warning("Please fill in both Title and Notes.")
+if "elapsed" not in st.session_state:
+    st.session_state.elapsed = 0
 
-    st.divider()
-    st.subheader("📖 Saved Notes")
-    notes_docs = db.collection("notes").order_by("date", direction=firestore.Query.DESCENDING).stream()
+# Sidebar
+page = st.sidebar.selectbox("Navigate", [
+    "Timer",
+    "Study Calendar",
+    "Task Tracker",
+    "Progress"
+])
 
-    for note in notes_docs:
-        data = note.to_dict()
-        note_id = note.id
-        st.markdown(f"### {data.get('title', 'No Title')}")
-        st.write(data.get("notes", "No Notes"))
-        st.caption(f"📅 {data.get('date', 'No Date')}")
+# ---------------- TIMER PAGE ----------------
+if page == "Timer":
+    st.title("⏱️ Study Timer")
 
-        if st.button("🗑 Delete", key=note_id):
-            db.collection("notes").document(note_id).delete()
-            st.success("Note deleted successfully!")
-            st.rerun()
-        st.divider()
+    subject = st.selectbox("Select Subject", st.session_state.subjects)
+    label = st.text_input("Session Label", "")
 
-# ==============================
-# TO-DO PAGE
-# ==============================
-elif menu == "To-Dos":
-    st.title("✅ To-Do List")
+    col1, col2, col3 = st.columns(3)
 
-    # Add new task section
-    with st.expander("➕ Add New Task"):
-        new_task = st.text_input("Task")
-        task_date = st.date_input("Date", value=date.today())
-        if st.button("Add Task"):
-            if new_task.strip():
-                db.collection("todos").add({
-                    "task": new_task.strip(),
-                    "date": str(task_date),
-                    "done": False
+    with col1:
+        if st.button("Start"):
+            st.session_state.running = True
+            st.session_state.start_time = time.time()
+
+    with col2:
+        if st.button("Stop"):
+            if st.session_state.running:
+                st.session_state.elapsed += time.time() - st.session_state.start_time
+                st.session_state.running = False
+
+                minutes = int(st.session_state.elapsed // 60)
+
+                # Save session
+                st.session_state.sessions.append({
+                    "subject": subject,
+                    "label": label,
+                    "time": datetime.now(),
+                    "duration": minutes
                 })
-                st.success("Task added!")
-                st.rerun()
-            else:
-                st.warning("Please type a task.")
 
-    st.divider()
-    st.subheader("📋 My Tasks")
-    todos_docs = db.collection("todos").order_by("date").stream()
+    with col3:
+        if st.button("Reset"):
+            st.session_state.running = False
+            st.session_state.start_time = None
+            st.session_state.elapsed = 0
 
-    for task_doc in todos_docs:
-        task_data = task_doc.to_dict()
-        task_id = task_doc.id
-        done = task_data.get("done", False)
-        status = "✅" if done else "❌"
+    # Display time
+    if st.session_state.running:
+        current = st.session_state.elapsed + (time.time() - st.session_state.start_time)
+    else:
+        current = st.session_state.elapsed
 
-        col1, col2 = st.columns([0.9, 0.1])
-        with col1:
-            checked = st.checkbox(f"{task_data.get('task')} — {task_data.get('date')}", value=done, key=f"chk_{task_id}")
-            if checked != done:
-                db.collection("todos").document(task_id).update({"done": checked})
-                st.rerun()
-        with col2:
-            if st.button("🗑", key=f"del_{task_id}"):
-                db.collection("todos").document(task_id).delete()
-                st.success("Task deleted!")
-                st.rerun()
+    mins, secs = divmod(int(current), 60)
+    st.subheader(f"⏳ {mins:02d}:{secs:02d}")
 
+    if st.session_state.running:
+        time.sleep(1)
+        st.rerun()
 
-# ==============================
-# CALENDAR PAGE
-# ==============================
-elif menu == "Calendar":
-    from streamlit_calendar import calendar
+    # Last session
+    st.subheader("Last Study Session")
+    if st.session_state.sessions:
+        last = st.session_state.sessions[-1]
+        st.write(f"Subject: {last['subject']}")
+        st.write(f"Label: {last['label']}")
+        st.write(f"Time: {last['time']}")
 
-    st.title("📅 Calendar View")
+# ---------------- CALENDAR ----------------
+elif page == "Study Calendar":
+    st.title("📅 Study Calendar")
 
-    # Load data
-    notes_docs = db.collection("notes").stream()
-    todos_docs = db.collection("todos").stream()
+    view = st.selectbox("View", ["Daily", "Weekly", "Monthly"])
 
-    events = []
+    if st.session_state.sessions:
+        for session in st.session_state.sessions:
+            st.write(f"{session['time'].date()} - {session['subject']} ({session['label']})")
+    else:
+        st.write("No sessions yet.")
 
-    # Add notes to events
-    for note in notes_docs:
-        data = note.to_dict()
-        events.append({
-            "title": f"📝 {data.get('title')}",
-            "start": data.get("date"),
-            "color": "#4CAF50"
-        })
+# ---------------- TASK TRACKER ----------------
+elif page == "Task Tracker":
+    st.title("✅ Task / Subject Tracker")
 
-    # Add todos to events
-    for task in todos_docs:
-        data = task.to_dict()
-        status = "✅" if data.get("done") else "❌"
-        events.append({
-            "title": f"{status} {data.get('task')}",
-            "start": data.get("date"),
-            "color": "#2196F3"
-        })
+    new_subject = st.text_input("Add Subject")
+    if st.button("Add Subject") and new_subject:
+        st.session_state.subjects.append(new_subject)
 
-    # ✅ FIXED DICTIONARY
-    calendar_options = {
-        "initialView": "dayGridMonth",
-        "height": 600,
-        "headerToolbar": {
-            "left": "prev,next today",
-            "center": "title",
-            "right": "dayGridMonth,timeGridWeek"
-        }
-    }
+    subject = st.selectbox("Select Subject", st.session_state.subjects)
 
-    calendar_result = calendar(
-        events=events,
-        options=calendar_options
-    )
+    task = st.text_input("Add Task")
+    if st.button("Add Task") and task:
+        if subject not in st.session_state.tasks:
+            st.session_state.tasks[subject] = []
+        st.session_state.tasks[subject].append({"task": task, "done": False})
 
-    # When clicking a date
-    if calendar_result and "dateClick" in calendar_result:
-        selected_date = calendar_result["dateClick"]["date"]
+    if subject in st.session_state.tasks:
+        for i, t in enumerate(st.session_state.tasks[subject]):
+            checked = st.checkbox(t["task"], value=t["done"], key=f"{subject}_{i}")
+            st.session_state.tasks[subject][i]["done"] = checked
 
-        st.subheader(f"📌 Tasks & Notes on {selected_date}")
+# ---------------- PROGRESS ----------------
+elif page == "Progress":
+    st.title("📊 Progress Tracking")
 
-        # Show notes
-        notes_on_date = db.collection("notes") \
-            .where("date", "==", selected_date) \
-            .stream()
+    total_minutes = sum(s["duration"] for s in st.session_state.sessions)
+    total_hours = total_minutes / 60
 
-        found_note = False
-        for note in notes_on_date:
-            found_note = True
-            data = note.to_dict()
-            st.write(f"📝 {data.get('title')} — {data.get('notes')}")
+    st.write(f"Total Study Hours: {total_hours:.2f}")
 
-        if not found_note:
-            st.write("No notes.")
+    today = datetime.now().date()
+    today_minutes = sum(s["duration"] for s in st.session_state.sessions if s["time"].date() == today)
 
-        # Show tasks
-        tasks_on_date = db.collection("todos") \
-            .where("date", "==", selected_date) \
-            .stream()
+    st.write(f"Today's Study Time: {today_minutes} minutes")
 
-        found_task = False
-        for task in tasks_on_date:
-            found_task = True
-            data = task.to_dict()
-            status = "✅" if data.get("done") else "❌"
-            st.write(f"{status} {data.get('task')}")
+    total_tasks = 0
+    completed_tasks = 0
 
-        if not found_task:
-            st.write("No tasks.")
+    for subject_tasks in st.session_state.tasks.values():
+        for t in subject_tasks:
+            total_tasks += 1
+            if t["done"]:
+                completed_tasks += 1
+
+    if total_tasks > 0:
+        percent = (completed_tasks / total_tasks) * 100
+        st.progress(percent / 100)
+        st.write(f"Completion: {percent:.2f}%")
+    else:
+        st.write("No tasks yet.")
+
