@@ -12,8 +12,7 @@ if "tasks" not in st.session_state:
     st.session_state.tasks = {}
 
 if "subjects" not in st.session_state:
-    st.session_state.subjects =input(subject)
-
+    st.session_state.subjects = []
 # Stopwatch state
 if "running" not in st.session_state:
     st.session_state.running = False
