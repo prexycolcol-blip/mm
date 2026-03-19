@@ -13,6 +13,7 @@ if "tasks" not in st.session_state:
 
 if "subjects" not in st.session_state:
     st.session_state.subjects = []
+
 # Stopwatch state
 if "running" not in st.session_state:
     st.session_state.running = False
@@ -33,7 +34,7 @@ page = st.sidebar.selectbox("Navigate", [
 
 # ---------------- TIMER PAGE ----------------
 if page == "Timer":
-    st.title("⏱️ Study Timer")
+    st.title("⏱️ Study Stopwatch")
 
     subject = st.selectbox("Select Subject", st.session_state.subjects)
     label = st.text_input("Session Label", "")
@@ -150,4 +151,3 @@ elif page == "Progress":
         st.write(f"Completion: {percent:.2f}%")
     else:
         st.write("No tasks yet.")
-
