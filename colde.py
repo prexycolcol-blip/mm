@@ -32,6 +32,13 @@ page = st.sidebar.selectbox("Navigate", [
     "Progress"
 ])
 
+# ---------------- SUBJECT INPUT ----------------
+st.sidebar.subheader("Add Subject")
+new_sub = st.sidebar.text_input("New Subject")
+if st.sidebar.button("Add") and new_sub:
+    if new_sub not in st.session_state.subjects:
+        st.session_state.subjects.append(new_sub)
+
 # ---------------- TIMER PAGE ----------------
 if page == "Timer":
     st.title("⏱️ Study Stopwatch")
